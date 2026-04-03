@@ -1,0 +1,254 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Velz Obfuscator V1</title><style>
+body{
+    margin:0;
+    font-family:monospace;
+    background:linear-gradient(-45deg,#0b0b0b,#001a33,#002b4d,#0b0b0b);
+    background-size:400% 400%;
+    animation:bgMove 10s infinite alternate;
+    color:#fff;
+    padding:20px;
+}
+
+@keyframes bgMove{
+    0%{background-position:0% 50%;}
+    100%{background-position:100% 50%;}
+}
+
+/* INTRO */
+#intro{
+    position:fixed;
+    width:100%;
+    height:100%;
+    background:#000;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+    animation:fadeOut 1s forwards;
+    animation-delay:3s;
+}
+
+.glitch{
+    font-size:30px;
+    color:#66ccff;
+    text-shadow:0 0 10px #66ccff,0 0 30px #66ccff;
+    animation:flicker 0.2s infinite;
+}
+
+@keyframes flicker{
+    50%{opacity:0.5;}
+}
+
+.noise{
+    position:absolute;
+    width:100%;
+    height:100%;
+    background:repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.03) 0px,
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+}
+
+@keyframes fadeOut{
+    to{opacity:0;visibility:hidden;}
+}
+
+/* UI */
+textarea,input,button{
+    width:100%;
+    margin-top:10px;
+    border-radius:10px;
+    border:none;
+}
+
+textarea{
+    height:150px;
+    background:#111;
+    color:#fff;
+    padding:10px;
+}
+
+input{
+    padding:10px;
+    background:#111;
+    color:#fff;
+    border:1px solid #66ccff;
+}
+
+button{
+    padding:12px;
+    background:#66ccff;
+    cursor:pointer;
+}
+
+.copy{background:#4db8ff;}
+.clear{background:#ff6666;}
+
+.fullscreen{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    z-index:99999;
+}
+
+.wipe{animation:wipeOut 0.3s}
+@keyframes wipeOut{to{opacity:0}}
+</style></head><body><div id="intro">
+    <h1 class="glitch">Velz Obfuscator V1</h1>
+    <div class="noise"></div>
+</div><textarea id="input" placeholder="Masukkan Lua script..."></textarea><input id="layers" type="number" placeholder="Layer (default 6)">
+<button onclick="startObf()">Obfuscate</button><textarea id="output" readonly></textarea><button class="copy" onclick="copyOutput()">COPY OUTPUT</button>
+<button onclick="toggleFullscreen()">FULLSCREEN OUTPUT</button>
+<button class="clear" onclick="clearAll()">CLEAR</button>
+
+<script>
+function rand(l=10){
+    let c="abcdefghijklmnopqrstuvwxyz",r="";
+    for(let i=0;i<l;i++) r+=c[Math.floor(Math.random()*c.length)];
+    return r;
+}
+
+function hash(s){
+    let h=0;
+    for(let i=0;i<s.length;i++){
+        h=((h<<5)-h)+s.charCodeAt(i);
+        h|=0;
+    }
+    return h;
+}
+
+// 🔐 XOR
+function xorEncrypt(str,key){
+    let out=[];
+    for(let i=0;i<str.length;i++){
+        out.push(str.charCodeAt(i)^key);
+    }
+    return out.join(",");
+}
+
+// 🎯 WDR STYLE
+function wdrEncode(str){
+    let out="";
+    for(let i=0;i<str.length;i++){
+        let c=str.charCodeAt(i);
+        if(Math.random()>0.5){
+            out+="\\"+c;
+        }else{
+            out+="\\x"+c.toString(16);
+        }
+    }
+    return out;
+}
+
+// 🎭 FAKE
+function fake(){
+return `
+local ${rand()}=function()
+local ${rand()}=math.random(1,9999)
+for i=1,${Math.floor(Math.random()*5+2)} do
+${rand()}=${rand()} ~ ${rand()}
+end
+end
+`;
+}
+
+function startObf(){
+let input=document.getElementById("input").value;
+let layers=parseInt(document.getElementById("layers").value)||6;
+
+if(!input) return;
+if(layers>12) layers=12;
+
+let pass=prompt("Password:");
+if(!pass) return;
+
+let passHash=hash(pass);
+let res=input.replace(/--.*$/gm,"").replace(/\s+/g," ");
+
+for(let i=0;i<layers;i++){
+let key=Math.floor(Math.random()*200)+20;
+let xor=xorEncrypt(res,key);
+let encoded=wdrEncode(xor);
+
+let v=rand(),f=rand();
+
+res=`return(function(...)
+${fake()}
+
+local function chk(p)
+local h=0 for i=1,#p do h=((h<<5)-h)+string.byte(p,i) end return h end
+if chk("")~=${passHash} then return end
+
+local raw="${encoded}"
+
+local function decode(str)
+local nums={}
+for num in string.gmatch(str,"\\\\(%d+)") do table.insert(nums,tonumber(num)) end
+for hex in string.gmatch(str,"\\\\x(%x%x)") do table.insert(nums,tonumber(hex,16)) end
+return nums
+end
+
+local function _d(t,k)
+local s=""
+for i=1,#t do
+s=s..string.char(t[i] ~ k)
+end
+return s
+end
+
+local decoded=_d(decode(raw),${key})
+
+if type(decoded)~="string" then return end
+
+local function ${f}(x)return loadstring(x)() end
+return ${f}(decoded)
+end)()`;
+}
+
+let id=Math.random().toString(36).substring(2,8).toUpperCase();
+let date=new Date().toLocaleString();
+
+let header=`--[[
+╔══════════════════════════════════════╗
+║        Velz Obfuscator V1           ║
+║   Welcome to VelzObfuscator.com     ║
+║        By:Velz                      ║
+║        Velz On Top                  ║
+║        ID: ${id}                    ║
+╚══════════════════════════════════════╝
+]]--\n`;
+
+document.getElementById("output").value=header+res;
+}
+
+function copyOutput(){
+navigator.clipboard.writeText(document.getElementById("output").value);
+}
+
+function toggleFullscreen(){
+document.getElementById("output").classList.toggle("fullscreen");
+}
+
+function clearAll(){
+if(!confirm("Hapus?")) return;
+let i=document.getElementById("input");
+let o=document.getElementById("output");
+i.classList.add("wipe");
+o.classList.add("wipe");
+setTimeout(()=>{
+i.value="";
+o.value="";
+i.classList.remove("wipe");
+o.classList.remove("wipe");
+},300);
+}
+</script></body>
+</html>
